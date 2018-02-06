@@ -7,9 +7,19 @@ project(zeromq_example VERSION 1.0.0)
 
 include("${config_file_path}")
 
+# Dependencies
+set(CPPZMQ_CMAKECONFIG_INSTALL_DIR "build/cmake" CACHE STRING "install path for cppzmqConfig.cmake")
+set(install_include_dir_backup ${CMAKE_INSTALL_INCLUDEDIR})
+set(CMAKE_INSTALL_INCLUDEDIR "${config_relative_output_dir}/../../include/cppzmq")
+add_subdirectory(../../../third-party/cppzmq ${CMAKE_CURRENT_BINARY_DIR}/cppzmq)
+set(CMAKE_INSTALL_INCLUDEDIR "${install_include_dir_backup}")
+
 # Executable
 add_executable(zeromq_example
   ./src/main.cpp
+  )
+target_link_libraries(zeromq_example
+  PRIVATE cppzmq
   )
 
 # Install Include
