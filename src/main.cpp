@@ -221,6 +221,59 @@ bool RunServerPublisher(const char* server_port, const char* publisher_port)
     return true;
 }
 
+bool RunMultiSubscriber(const char* uri_1, const char* uri_2)
+{
+    printf("\nMulti-Subscriber\n\tConnecting to following servers:\n\t\t1: %s\n\t\t2: %s\n\n", uri_1, uri_2);
+
+    zmq::context_t context(1);
+    zmq::socket_t socket_1(context, ZMQ_SUB);
+    socket_1.connect(uri_1);
+    socket_1.setsockopt(ZMQ_SUBSCRIBE, "", 0);
+
+    zmq::socket_t socket_2(context, ZMQ_SUB);
+    socket_2.connect(uri_2);
+    socket_2.setsockopt(ZMQ_SUBSCRIBE, "", 0);
+
+    zmq::pollitem_t sockets[] = {{socket_1, 0, ZMQ_POLLIN, 0}, {socket_2, 0, ZMQ_POLLIN, 0}};
+
+    std::string received_value;
+    while (received_value.compare("exit"))
+    {
+        printf("\tWaiting messages from both servers ...");
+        fflush(stdout);
+
+        zmq::message_t message;
+        zmq::poll(&sockets[0], 2, -1);
+        printf("done.\n");
+        if (sockets[0].revents & ZMQ_POLLIN)
+        {
+            printf("\t\tGetting message from Server: %s ...", uri_1);
+            fflush(stdout);
+            socket_1.recv(&message);
+            printf("done.\n");
+            printf("\t\tMessage: Size: %d ; Value: %s\n", static_cast<int>(message.size()), static_cast<const char*>(message.data()));
+            received_value.assign((const char*)message.data(), message.size() - 1);
+            continue;
+        }
+
+        if (sockets[1].revents & ZMQ_POLLIN)
+        {
+            printf("\t\tGetting message from Server: %s ...", uri_2);
+            fflush(stdout);
+            socket_2.recv(&message);
+            printf("done.\n");
+            printf("\t\tMessage: Size: %d ; Value: %s\n", static_cast<int>(message.size()), static_cast<const char*>(message.data()));
+            received_value.assign((const char*)message.data(), message.size() - 1);
+            continue;
+        }
+    }
+
+    printf("Stopping subscribers.\n");
+    socket_1.close();
+    socket_2.close();
+    return true;
+}
+
 int main(int argc, char const* argv[])
 {
     std::string arguments[3];
@@ -249,6 +302,8 @@ int main(int argc, char const* argv[])
         RunNonWaitingSubscriber();
     else if (!arguments[0].compare("server_publisher"))
         RunServerPublisher(arguments[1].c_str(), arguments[2].c_str());
+    else if (!arguments[0].compare("multi_subscriber"))
+        RunMultiSubscriber(arguments[1].c_str(), arguments[2].c_str());
     else
         std::cout << "Invalid Command (" << argc << "):\n\t" << arguments[0] << "\nOptions:\n"
                   << "\tserver\n"
@@ -257,6 +312,7 @@ int main(int argc, char const* argv[])
                   << "\tsubscriber\n"
                   << "\tnon_waiting_subscriber\n"
                   << "\tserver_publisher <server_port> <publisher_port>\t\t-E.g.: server_publisher 9999 9998\n"
+                  << "\tmulti_subscriber <server_uri1> <server_uri2>\t\t-E.g.: multi_subscriber tcp://localhost:9999 tcp://localhost:9998\n"
                   << "\n";
 
     return 0;
