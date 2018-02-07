@@ -43,6 +43,40 @@ bool RunServer(const char* port)
     return true;
 }
 
+
+bool RunServerForBroker(const char* broker_uri)
+{
+    zmq::context_t context(1);
+    zmq::socket_t socket(context, ZMQ_REP);
+    socket.connect(broker_uri);
+    printf("\nServer for Broker\n\tBrocker URI: %s\n\n", broker_uri);
+
+    std::string request;
+    while (request.compare("exit"))
+    {
+        printf("\tWaiting for Client request ...");
+        fflush(stdout);
+
+        zmq::message_t request_message;
+        socket.recv(&request_message);
+        printf("done.\n");
+        printf("\t\tMessage: Size: %d ; Value: %s\n", static_cast<int>(request_message.size()), static_cast<const char*>(request_message.data()));
+        request.assign(static_cast<const char*>(request_message.data()), request_message.size() - 1);
+
+        printf("\tSending reply:\n");
+
+        std::string server_reply("Server Reply to the request: ");
+        server_reply += request;
+
+        zmq::message_t reply_message((void*)server_reply.c_str(), server_reply.size() + 1);
+        printf("\t\tMessage: Size: %d ; Value: %s\n", static_cast<int>(reply_message.size()), static_cast<const char*>(reply_message.data()));
+        socket.send(reply_message);
+    }
+
+    printf("Stopping Server.\n");
+    return true;
+}
+
 bool RunClient(const char* uri)
 {
     zmq::context_t context(1);
@@ -273,6 +307,66 @@ bool RunMultiSubscriber(const char* uri_1, const char* uri_2)
     return true;
 }
 
+bool RunClientServerBroker(const char* frontend_port, const char* backend_port)
+{
+    zmq::context_t context(1);
+    zmq::socket_t frontend(context, ZMQ_ROUTER);  // Router talks with clients "REQ"
+    zmq::socket_t backend(context, ZMQ_DEALER);   // Dealer talks with servers "REP"
+    std::string uri("tcp://*:");
+    std::string frontend_uri((uri + frontend_port).c_str());
+    std::string backend_uri((uri + backend_port).c_str());
+    printf("\nClient/Server Broker\n\t- Frontend: %s\n\t- Backend: %s\n", frontend_uri.c_str(), backend_uri.c_str());
+    frontend.bind(frontend_uri.c_str());
+    backend.bind(backend_uri.c_str());
+
+    zmq::pollitem_t items[] = {{frontend, 0, ZMQ_POLLIN, 0}, {backend, 0, ZMQ_POLLIN, 0}};
+    while (1)
+    {
+        zmq::message_t message;
+        int more = 0;  //  Multipart detection
+        zmq::poll(&items[0], 2, -1);
+        if (items[0].revents & ZMQ_POLLIN)
+        {
+            printf("\t\tFrontend: Sending message to backend ...");
+            fflush(stdout);
+            while (1)
+            {
+                //  Process all parts of the message
+                frontend.recv(&message);
+
+                size_t more_size = sizeof(more);
+                frontend.getsockopt(ZMQ_RCVMORE, &more, &more_size);
+                backend.send(message, more ? ZMQ_SNDMORE : 0);
+                if (!more)
+                    break;  //  Last message part
+            }
+
+            printf(" done.\n");
+        }
+
+        if (items[1].revents & ZMQ_POLLIN)
+        {
+            printf("\t\tBackend: Sending message to frontend ... ");
+            fflush(stdout);
+            while (1)
+            {
+                //  Process all parts of the message
+                backend.recv(&message);
+
+                size_t more_size = sizeof(more);
+                backend.getsockopt(ZMQ_RCVMORE, &more, &more_size);
+                frontend.send(message, more ? ZMQ_SNDMORE : 0);
+                if (!more)
+                    break;  //  Last message part
+            }
+
+            printf(" done.\n");
+        }
+    }
+
+    return true;
+}
+
 int main(int argc, char const* argv[])
 {
     std::string arguments[3];
@@ -291,6 +385,8 @@ int main(int argc, char const* argv[])
 
     if (!arguments[0].compare("server"))
         RunServer(arguments[1].c_str());
+    else if (!arguments[0].compare("server_for_broker"))
+        RunServerForBroker(arguments[1].c_str());
     else if (!arguments[0].compare("client"))
         RunClient(arguments[1].c_str());
     else if (!arguments[0].compare("publisher"))
@@ -303,15 +399,19 @@ int main(int argc, char const* argv[])
         RunServerPublisher(arguments[1].c_str(), arguments[2].c_str());
     else if (!arguments[0].compare("multi_subscriber"))
         RunMultiSubscriber(arguments[1].c_str(), arguments[2].c_str());
+    else if (!arguments[0].compare("client_server_broker"))
+        RunClientServerBroker(arguments[1].c_str(), arguments[2].c_str());
     else
         std::cout << "Invalid Command (" << argc << "):\n\t" << arguments[0] << "\nOptions:\n"
                   << "\tserver <server_port>\t\t\t\t\t-E.g.: server 9999\n"
+                  << "\tserver_for_broker <broker_uri>\t\t\t\t-E.g.: server_for_broker tcp://localhost:8000\n"
                   << "\tclient <server_uri>\t\t\t\t\t-E.g.: client tcp://localhost:9999\n"
                   << "\tpublisher <publishe_port>\t\t\t\t-E.g.: publisher 9999\n"
                   << "\tsubscriber <publisher_uri>\t\t\t\t-E.g.: subscriber tcp://localhost:9999\n"
                   << "\tnon_waiting_subscriber <publisher_uri>\t\t\t-E.g.: non_waiting_subscriber tcp://localhost:9999\n"
                   << "\tserver_publisher <server_port> <publisher_port>\t\t-E.g.: server_publisher 9999 9998\n"
                   << "\tmulti_subscriber <server_uri1> <server_uri2>\t\t-E.g.: multi_subscriber tcp://localhost:9999 tcp://localhost:9998\n"
+                  << "\tclient_server_broker <frontend_port> <backend_port>\t-E.g.: client_server_broker 9000 8000\n"
                   << "\n";
 
     return 0;
