@@ -167,16 +167,18 @@ bool RunNonWaitingSubscriber()
     return true;
 }
 
-bool RunServerPublisher()
+bool RunServerPublisher(const char* server_port, const char* publisher_port)
 {
     zmq::context_t context(1);
     zmq::socket_t server_socket(context, ZMQ_REP);
     zmq::socket_t publisher_socket(context, ZMQ_PUB);
-    std::string server_uri = "tcp://*:9999";
-    std::string publisher_uri = "tcp://*:9998";
+    std::string server_uri("tcp://*:");
+    std::string publisher_uri("tcp://*:");
+    server_uri += server_port;
+    publisher_uri += publisher_port;
     server_socket.bind(server_uri.c_str());
     publisher_socket.bind(publisher_uri.c_str());
-    printf("\nServer Publisher\n\tServer URL: tcp://localhost:9999\n\tPublisher URL: tcp://localhost:9998\n\n");
+    printf("\nServer Publisher\n\tServer URL: tcp://localhost:%s\n\tPublisher URL: tcp://localhost:%s\n\n", server_port, publisher_port);
 
     std::string value_to_publish("None - Send the Value using a Client");
     while (value_to_publish.compare("exit"))
@@ -221,36 +223,40 @@ bool RunServerPublisher()
 
 int main(int argc, char const* argv[])
 {
-    std::string argument;
+    std::string arguments[3];
     switch (argc)
     {
+    case 4:
+        arguments[2] = argv[3];
+    case 3:
+        arguments[1] = argv[2];
     case 2:
-        argument = argv[1];
+        arguments[0] = argv[1];
         break;
     default:
         break;
     }
 
-    if (!argument.compare("server"))
+    if (!arguments[0].compare("server"))
         RunServer();
-    else if (!argument.compare("client"))
+    else if (!arguments[0].compare("client"))
         RunClient();
-    else if (!argument.compare("publisher"))
+    else if (!arguments[0].compare("publisher"))
         RunPublisher();
-    else if (!argument.compare("subscriber"))
+    else if (!arguments[0].compare("subscriber"))
         RunSubscriber();
-    else if (!argument.compare("non_waiting_subscriber"))
+    else if (!arguments[0].compare("non_waiting_subscriber"))
         RunNonWaitingSubscriber();
-    else if (!argument.compare("server_publisher"))
-        RunServerPublisher();
+    else if (!arguments[0].compare("server_publisher"))
+        RunServerPublisher(arguments[1].c_str(), arguments[2].c_str());
     else
-        std::cout << "Invalid Command (" << argc << "):\n\t" << argument << "\nOptions:\n"
+        std::cout << "Invalid Command (" << argc << "):\n\t" << arguments[0] << "\nOptions:\n"
                   << "\tserver\n"
                   << "\tclient\n"
                   << "\tpublisher\n"
                   << "\tsubscriber\n"
                   << "\tnon_waiting_subscriber\n"
-                  << "\tserver_publisher\n"
+                  << "\tserver_publisher <server_port> <publisher_port>\t\t-E.g.: server_publisher 9999 9998\n"
                   << "\n";
 
     return 0;
