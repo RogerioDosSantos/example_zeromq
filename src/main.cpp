@@ -8,13 +8,14 @@
 
 #include "../../../../third-party/cppzmq/zmq.hpp"
 
-bool RunServer()
+bool RunServer(const char* port)
 {
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_REP);
-    std::string uri = "tcp://*:9999";
+    std::string uri = "tcp://*:";
+    uri += port;
     socket.bind(uri.c_str());
-    printf("\nServer\n\tURL: tcp://localhost:9999\n\n");
+    printf("\nServer\n\tURI: tcp://localhost:%s\n\n", port);
 
     std::string request;
     while (request.compare("exit"))
@@ -42,13 +43,12 @@ bool RunServer()
     return true;
 }
 
-bool RunClient()
+bool RunClient(const char* uri)
 {
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_REQ);
-    std::string uri = "tcp://localhost:9999";
-    socket.connect(uri.c_str());
-    printf("\nClient\n\tURL: tcp://localhost:9999\n\n");
+    socket.connect(uri);
+    printf("\nClient\n\tServer URI: %s\n\n", uri);
 
     std::string request;
     while (request.compare("exit"))
@@ -75,13 +75,14 @@ bool RunClient()
     return true;
 }
 
-bool RunPublisher()
+bool RunPublisher(const char* port)
 {
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_PUB);
-    std::string uri = "tcp://*:9998";
+    std::string uri = "tcp://*:";
+    uri += port;
     socket.bind(uri.c_str());
-    printf("\nPublisher\n\tURL: tcp://localhost:9998\n\n");
+    printf("\nPublisher\n\tURI: tcp://localhost:%s\n\n", port);
 
     std::string value_to_publish;
     while (value_to_publish.compare("exit"))
@@ -100,14 +101,13 @@ bool RunPublisher()
     return true;
 }
 
-bool RunSubscriber()
+bool RunSubscriber(const char* uri)
 {
-    std::string uri = "tcp://localhost:9998";
-    printf("\nSubscriber\n\tConnecting to URL: tcp://localhost:9998\n\n");
+    printf("\nSubscriber\n\tConnecting to URI: %s\n\n", uri);
 
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_SUB);
-    socket.connect(uri.c_str());
+    socket.connect(uri);
 
     // std::string filter("M1");  // You can use empty string to receive all messages types.
     std::string filter("");  // You can use empty string to receive all messages types.
@@ -130,14 +130,13 @@ bool RunSubscriber()
     return true;
 }
 
-bool RunNonWaitingSubscriber()
+bool RunNonWaitingSubscriber(const char* uri)
 {
-    std::string uri = "tcp://localhost:9998";
-    printf("\nNon Waiting Subscriber\n\tConnecting to URL: tcp://localhost:9998\n\n");
+    printf("\nNon Waiting Subscriber\n\tConnecting to URI: %s\n\n", uri);
 
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_SUB);
-    socket.connect(uri.c_str());
+    socket.connect(uri);
 
     // std::string filter("M1");  // You can use empty string to receive all messages types.
     std::string filter("");  // You can use empty string to receive all messages types.
@@ -291,26 +290,26 @@ int main(int argc, char const* argv[])
     }
 
     if (!arguments[0].compare("server"))
-        RunServer();
+        RunServer(arguments[1].c_str());
     else if (!arguments[0].compare("client"))
-        RunClient();
+        RunClient(arguments[1].c_str());
     else if (!arguments[0].compare("publisher"))
-        RunPublisher();
+        RunPublisher(arguments[1].c_str());
     else if (!arguments[0].compare("subscriber"))
-        RunSubscriber();
+        RunSubscriber(arguments[1].c_str());
     else if (!arguments[0].compare("non_waiting_subscriber"))
-        RunNonWaitingSubscriber();
+        RunNonWaitingSubscriber(arguments[1].c_str());
     else if (!arguments[0].compare("server_publisher"))
         RunServerPublisher(arguments[1].c_str(), arguments[2].c_str());
     else if (!arguments[0].compare("multi_subscriber"))
         RunMultiSubscriber(arguments[1].c_str(), arguments[2].c_str());
     else
         std::cout << "Invalid Command (" << argc << "):\n\t" << arguments[0] << "\nOptions:\n"
-                  << "\tserver\n"
-                  << "\tclient\n"
-                  << "\tpublisher\n"
-                  << "\tsubscriber\n"
-                  << "\tnon_waiting_subscriber\n"
+                  << "\tserver <server_port>\t\t\t\t\t-E.g.: server 9999\n"
+                  << "\tclient <server_uri>\t\t\t\t\t-E.g.: client tcp://localhost:9999\n"
+                  << "\tpublisher <publishe_port>\t\t\t\t-E.g.: publisher 9999\n"
+                  << "\tsubscriber <publisher_uri>\t\t\t\t-E.g.: subscriber tcp://localhost:9999\n"
+                  << "\tnon_waiting_subscriber <publisher_uri>\t\t\t-E.g.: non_waiting_subscriber tcp://localhost:9999\n"
                   << "\tserver_publisher <server_port> <publisher_port>\t\t-E.g.: server_publisher 9999 9998\n"
                   << "\tmulti_subscriber <server_uri1> <server_uri2>\t\t-E.g.: multi_subscriber tcp://localhost:9999 tcp://localhost:9998\n"
                   << "\n";
