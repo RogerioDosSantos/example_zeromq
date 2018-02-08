@@ -119,11 +119,15 @@ bool RunPublisher(const char* port)
     printf("\nPublisher\n\tURI: tcp://localhost:%s\n\n", port);
 
     std::string value_to_publish;
+    std::string message_header("MessageID");
     while (value_to_publish.compare("exit"))
     {
         printf("\tPublishing Values:\n");
         printf("\t\tEnter item to be published or 'exit' to stop the publisher and the subscribers: ");
         std::getline(std::cin, value_to_publish);
+
+        zmq::message_t envelop((void*)message_header.c_str(), message_header.size() + 1);
+        socket.send(envelop, ZMQ_SNDMORE);
 
         zmq::message_t message((void*)value_to_publish.c_str(), value_to_publish.size() + 1);
         printf("\t\tMessage: Size: %d ; Value: %s\n", static_cast<int>(message.size()), static_cast<const char*>(message.data()));
@@ -143,8 +147,7 @@ bool RunSubscriber(const char* uri)
     zmq::socket_t socket(context, ZMQ_SUB);
     socket.connect(uri);
 
-    // std::string filter("M1");  // You can use empty string to receive all messages types.
-    std::string filter("");  // You can use empty string to receive all messages types.
+    std::string filter("MessageID");  // You can use empty string to receive all messages types.
     socket.setsockopt(ZMQ_SUBSCRIBE, filter.c_str(), filter.size());
 
     std::string received_value;
@@ -152,9 +155,15 @@ bool RunSubscriber(const char* uri)
     {
         printf("\tWaiting to receive message (filter: %s) from publisher ...", filter.c_str());
         fflush(stdout);
-        zmq::message_t message;
-        socket.recv(&message, 0);
+
+        zmq::message_t envelop;
+        socket.recv(&envelop);
         printf("done.\n");
+        printf("\t\tEnvelop: Size: %d ; Value: %s\n", static_cast<int>(envelop.size()), static_cast<const char*>(envelop.data()));
+
+        zmq::message_t message;
+        socket.recv(&message);
+
         printf("\t\tMessage: Size: %d ; Value: %s\n", static_cast<int>(message.size()), static_cast<const char*>(message.data()));
         received_value.assign((const char*)message.data(), message.size() - 1);
     }
